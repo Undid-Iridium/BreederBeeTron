@@ -92,7 +92,6 @@ local function generate_quantum_anomaly()
     quantum_anomaly_me_interface.setInterfaceConfiguration(1, cur_database.address, db_index)
     -- hydro_me_interface.getItemInNetwork(1, 0)
     -- hydro_me_interface_upgrade.requestFluids(current_component.database.address, 1, 1000)
-    quantum_anomaly_transposer.transferItem(sides.south, sides.down)
     return quantum_anomaly_transposer.transferItem(sides.south, sides.down)
 end
 
