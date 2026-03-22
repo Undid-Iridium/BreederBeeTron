@@ -13,8 +13,9 @@ local hydro_me_interface = current_component.proxy("5fc3698d-4aa7-4d2f-b1b2-74d8
 local unknown_particle_me_interface = current_component.proxy("03808a06-ecf5-4e34-a73d-c6978be177fd", "me_interface")
 local quantum_anomaly_me_interface = current_component.proxy("82234f8e-d97d-4851-8ac3-18cb8555dfc9", "me_interface")
 
-
-
+local unknown_particle_database  = current_component.proxy("cfc57228-ce8e-4f61-898c-31aba9215700", "database")
+local hydrogen_atom_database  = current_component.proxy("92c3bf50-e07d-4fbb-9596-9ef12d661175", "database")
+local quantum_anomaly_database  = current_component.proxy("c4773943-069b-48ce-8c96-ed3917c54022", "database")
 -- local hydro_me_interface_upgrade = current_component.proxy("5fc3698d-4aa7-4d2f-b1b2-74d855e2aa24", "upgrade_me")
 -- setFluidInterfaceConfiguration 
 
@@ -34,37 +35,38 @@ local quantum_anomaly_me_interface = current_component.proxy("82234f8e-d97d-4851
 
 
 
--- If there are unknown particle then do not do this, if there are hydrogen atoms, also do not do this
-
-
-
-local function generate_hydrogen_atom()
+local function set_hydrogen_atom_fluid()
     local fluid_name = "Hydrogen"
     local db_index = 1
     local damage = 0
     local fluid_index = 0
-    local cur_database  = current_component.proxy("92c3bf50-e07d-4fbb-9596-9ef12d661175", "database")
-    cur_database.set(db_index, "ae2fc:fluid_drop", damage , string.format("{ Fluid: %s }", fluid_name))
-    hydro_me_interface.setFluidInterfaceConfiguration(fluid_index, cur_database.address, db_index)
+
+    hydrogen_atom_database.set(db_index, "ae2fc:fluid_drop", damage , string.format("{ Fluid: %s }", fluid_name))
+    hydro_me_interface.setFluidInterfaceConfiguration(fluid_index, hydrogen_atom_database.address, db_index)
+end
+
+
+-- If there are unknown particle then do not do this, if there are hydrogen atoms, also do not do this
+
+local function generate_hydrogen_atom()
     -- hydro_me_interface.getItemInNetwork(1, 0)
     -- hydro_me_interface_upgrade.requestFluids(current_component.database.address, 1, 1000)
     hydro_transposer.transferFluid(sides.south, sides.down)
-
 end
 
-local function generate_unknown_particle()
+local function set_unknown_particle_fluid()
     -- local item_name_id = "9816"
     -- local item_name = "Hydrogen Ion"
     local fluid_name = "Hydrogen"
     local db_index = 2
     local damage = 0
     local fluid_index = 0
-    local cur_database  = current_component.proxy("cfc57228-ce8e-4f61-898c-31aba9215700", "database")
+    unknown_particle_database.set(db_index, "ae2fc:fluid_drop", damage , string.format("{ Fluid: %s }", fluid_name))
+    unknown_particle_me_interface.setFluidInterfaceConfiguration(fluid_index, unknown_particle_database.address, db_index)
+end
 
+local function generate_unknown_particle()
     
-
-    cur_database.set(db_index, "ae2fc:fluid_drop", damage , string.format("{ Fluid: %s }", fluid_name))
-    unknown_particle_me_interface.setFluidInterfaceConfiguration(fluid_index, cur_database.address, db_index)
     -- hydro_me_interface.getItemInNetwork(1, 0)
     -- hydro_me_interface_upgrade.requestFluids(current_component.database.address, 1, 1000)
     unknown_partical_transposer.transferFluid(sides.east, sides.down)
@@ -81,15 +83,10 @@ local function generate_unknown_particle()
 end
 
 local function generate_quantum_anomaly()
-    local fluid_name = "Hydrogen"
     local db_index = 9
-    local damage = 0
-    local fluid_index = 0
-    local cur_database  = current_component.proxy("c4773943-069b-48ce-8c96-ed3917c54022", "database")
-
     -- cur_database.set(db_index, "ae2fc:fluid_drop", damage , string.format("{ Fluid: %s }", fluid_name))
     -- cur_database.set(db_index, "particleBase", damage) ITEM TOO DUMB
-    quantum_anomaly_me_interface.setInterfaceConfiguration(1, cur_database.address, db_index)
+    quantum_anomaly_me_interface.setInterfaceConfiguration(1, quantum_anomaly_database.address, db_index)
     -- hydro_me_interface.getItemInNetwork(1, 0)
     -- hydro_me_interface_upgrade.requestFluids(current_component.database.address, 1, 1000)
     return quantum_anomaly_transposer.transferItem(sides.south, sides.down)
@@ -132,18 +129,39 @@ thread.create(function(a, b)
     end
 end)
 
+local function process_anomaly_check()
+    if (generate_quantum_anomaly() <= 0) then
+        print(os.date(), " : No anomaly could be sent, no hydrogen to process, running generate_hydrogen_atom, then generate_unknown_particle - Exit flag: ", NeedExitFlag)
+        generate_hydrogen_atom()
+        generate_unknown_particle()
+        -- if(unknown_partical_transposer.getFluidInTank(sides.down, 1).amount == 0) then
+        --     print(os.date(), " : No anomaly could be sent, no hydrogen to process, running generate_hydrogen_atom, then generate_unknown_particle - Exit flag: ", NeedExitFlag)
+        --     generate_hydrogen_atom()
+        --     generate_unknown_particle()
+        -- else
+        --     print(os.date(), " : No anomaly could be sent, hydrogen atom available, generate_unknown_particle - Exit flag: ", NeedExitFlag)
+        --     generate_unknown_particle()
+        -- end
+        os.sleep(5)
+    end
+end
+
+set_hydrogen_atom_fluid()
+set_unknown_particle_fluid()
+
 
 while NeedExitFlag ~= true do
-    if quantum_anomaly_transposer.getStackInSlot(sides.down, 1).size == 0 then
-        if (generate_quantum_anomaly() <= 0) then
-            print(os.date(), " : No anomaly could be sent, running generate anomaly", NeedExitFlag)
-            generate_hydrogen_atom()
-
-            generate_unknown_particle()
-            os.sleep(5)
+    if quantum_anomaly_transposer ~= nil then
+        local current_stack = quantum_anomaly_transposer.getStackInSlot(sides.down, 1) 
+        if current_stack == nil then
+            process_anomaly_check()
+        elseif current_stack.size == 0 then
+            process_anomaly_check()
+        else
+            print(os.date(), " : Anomaly is in slot, and is waiting for processing - Exit flag: ", NeedExitFlag)
         end
     else
-        print(os.date(), " : Anomaly is in slot, and is waiting for processing - Exit flag: ", NeedExitFlag)
+        print(os.date(), " : Quantum transposer was null.. - Exit flag: ", NeedExitFlag)
     end
     os.sleep(5)
     -- computer.pullSignal(5)
