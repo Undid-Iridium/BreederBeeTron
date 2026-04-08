@@ -4,4 +4,3 @@ for k, v in pairs(me) do
   print(k, type(v))
 end
 
-me.
