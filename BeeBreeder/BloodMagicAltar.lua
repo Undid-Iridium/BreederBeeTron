@@ -1,7 +1,9 @@
 local current_component = require('component')
 local event = require("event")
+local color = require('colors')
 local sides = require('sides')
 local computer = require('computer')
+
 
 
 local altar_add=""
