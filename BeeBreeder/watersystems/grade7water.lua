@@ -90,7 +90,13 @@ local main = thread.create(function()
             if temp_val & (1 << 0) ~= 0 then
                 -- Take 2 bits for value
                 local low_bit = temp_val & (1 << 1)
+                if low_bit ~= 0 then
+                    low_bit = 1
+                end
                 local high_bit =  temp_val & (1 << 2)
+                if high_bit ~= 0 then
+                    high_bit = 1
+                end
                 print("Low bit: " .. low_bit .. " and high bit: " .. high_bit)
                 local total = 0
                 total = total | (low_bit << 0)

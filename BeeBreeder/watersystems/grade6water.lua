@@ -33,7 +33,7 @@ end
   
 
 local function swap_lens(prev)
-    print_d(" : pulling out prev " .. prev)
+    print_d(" : pulling out " .. prev)
     lens_transposer.transferItem(sides.bottom, sides.top, 1, 1, prev)
 end
 
@@ -51,6 +51,8 @@ local main = thread.create(function()
         -- os.sleep(5)
         local status, err = pcall(swap_lens, 9)
         lens_transposer.transferItem(sides.top, sides.bottom, 1, 1, 1)
+
+        -- lens_transposer.transferItem(sides.top, sides.bottom, 1, 1, 1)
         while lens_to_use <= 10 do
             print_d("Waiting for redstone")
             local _, _, side, oldValue, newValue = event.pull("redstone_changed")
