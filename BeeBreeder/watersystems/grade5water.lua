@@ -15,43 +15,28 @@ local helium_plasma_interface_db = current_component.proxy("63114057-ae92-4a19-9
 local coolant_interface_db = current_component.proxy("57a78c64-9707-4028-8108-1c5d2ef69a6e", "database")
 
 local system_state = current_component.proxy("7345483f-9fcc-460e-afce-938a6653d024", "redstone")
+local machineProxy = current_component.proxy("c1a281d2-211a-4eb9-bd71-fa5fee8ceaff", "gt_machine")
 
-local function keyboardEvent(eventName, keyboardAddress, charNum, codeNum, playerName)
-    if charNum == 113 then
-        NeedExitFlag = true
-        return false
-    end
-end
-
-local function initEvents()
-    NeedExitFlag = false
-end
-
-
-local function hookEvents()
-    event.listen("key_down", keyboardEvent)
-end
-
-initEvents()
-hookEvents()
-
+local thread = require('thread')
+local event = require('event')
+local term = require('term')
 local thread = require("thread")
 
-local timeout = 5 -- seconds
-thread.create(function(a, b)
+local keyHandler = thread.create(function()
+    local keyboard = require('keyboard')
     while true do
-        local name, addr, char, code = event.pull(timeout, "key_down")
-        if name == "key_down" then
-            if code == 209 then -- 209 is PageDown
-              print("PageDown pressed. Stopping.")
-              NeedExitFlag = true
-              return
-            end
-        end
-        computer.pullSignal(1)
+      _, _, _, code, _ = term.pull('key_down')
+    --   if code == keyboard.keys.p then printDashboard()
+    --   elseif code == keyboard.keys.u then
+    --     pumps = {}
+    --     findPumps()
+    --   end
     end
-end)
+  end)
 
+local function print_d(msg)
+    print(os.date() .. " : " .. msg)
+end
 
 
 -- raise 10 times (add 100L/s of helium plasma, 100k per hit = 1000k)
@@ -80,27 +65,16 @@ local function transfer_coolant()
 end
 
 local function regulate_system()
-    local fluid_name = "plasma.helium"
-    local db_index = 1
-    local damage = 0
-    local fluid_index = 0
-    helium_plasma_interface_db.set(db_index, "ae2fc:fluid_drop", damage , string.format("{ Fluid: %s }", fluid_name))
-    helium_plasma_interface.setFluidInterfaceConfiguration(fluid_index, helium_plasma_interface_db.address, db_index)
 
-    local coolant_name = "supercoolant"
-    local db_index_coolant = 2
-    coolant_interface_db.set(db_index_coolant, "ae2fc:fluid_drop", damage , string.format("{ Fluid: %s }", coolant_name))
-    coolant_interface.setFluidInterfaceConfiguration(fluid_index, coolant_interface_db.address, db_index_coolant)
     -- hydro_me_interface.getItemInNetwork(1, 0)
     -- hydro_me_interface_upgrade.requestFluids(current_component.database.address, 1, 1000)
 
     local count = 0
-
     while count < 3 do
-        print(os.date(), "Transferring helium")
+        print_d( "Transferring helium")
         helium_plasma_transposer.transferFluid(sides.west, sides.east, 100)
         os.sleep(11) -- 10L/S so 10 seconds to get to 1000k (100K * 10) -> 10 seconds
-        print(os.date(), "Transferring coolant")
+        print_d("Transferring coolant")
         transfer_coolant() -- 100L/S so 10000/100 -> 100 seconds? -> 10000 - 200 runs needed 
         os.sleep(21)
         count = count + 1
@@ -116,27 +90,60 @@ end
 -- alias ec="edit grade5water.lua"
 -- alias run="grade5water"
 
-local time_offset = 24*3
 
 
+local main = thread.create(function()
+    -- THE LOOP
+    local fluid_name = "plasma.helium"
+    local db_index = 1
+    local damage = 0
+    local fluid_index = 0
+    helium_plasma_interface_db.set(db_index, "ae2fc:fluid_drop", damage , string.format("{ Fluid: %s }", fluid_name))
+    helium_plasma_interface.setFluidInterfaceConfiguration(fluid_index, helium_plasma_interface_db.address, db_index)
 
-while NeedExitFlag ~= true do
-    if(system_state.getInput(sides.down) > 0) then
-        -- local duration_time = os.time() + 120 fuck os.clock
-        local start = os.time()
-        print(os.date(), " : Plant running, time to transfer liquids")
-        regulate_system()
-        -- local rest_of_time = duration_time - os.time()
+    local coolant_name = "supercoolant"
+    local db_index_coolant = 2
+    coolant_interface_db.set(db_index_coolant, "ae2fc:fluid_drop", damage , string.format("{ Fluid: %s }", coolant_name))
+    coolant_interface.setFluidInterfaceConfiguration(fluid_index, coolant_interface_db.address, db_index_coolant)
 
-        print(os.date(), " : Plant running, sleeping for: ", 115 - (os.time() - start)/time_offset)
-        -- 1120 - 1099 = 21 seconds left
-        os.sleep(115 - (os.time() - start)/time_offset) -- 15 * 3 + 5 second offset
-    else
-        print(os.date(), " : Waiting on plant to start recipe")
+    local loop_started = false
+    local prevValue = 0
+    while true do
+        print_d("Waiting for start")
+        if prevValue < machineProxy.getWorkProgress() then
+            regulate_system()
+            local current_progress = machineProxy.getWorkProgress()
+            print_d("Waiting for start again")
+            while prevValue <= current_progress do
+                prevValue = current_progress
+                os.sleep(1)
+                current_progress = machineProxy.getWorkProgress()
+                os.sleep(1)
+            end
+            print_d("Progress prev is greater than current, must be starting")
+            prevValue = machineProxy.getWorkProgress()
+        end
+        os.sleep(1)
     end
-    os.sleep(1)
-    -- computer.pullSignal(5)
-end
+  end)
+
+  
+
+
+
+local cleanUp = thread.create(function()
+    event.pull('interrupted')
+    term.clear()
+    print('Received Exit Command!')
+    main.kill()
+    keyhandler.kill()
+    os.exit(0)
+end)
+
+
+
+thread.waitForAny({main, keyHandler, cleanUp})
+os.exit(0)
 
 
 -- hydro_me_interface.setFluidInterfaceConfiguration(0)
